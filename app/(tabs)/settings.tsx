@@ -31,7 +31,6 @@ export default function SettingsScreen() {
           }}
           style={styles.segmented}
           tintColor={isDark ? '#334155' : '#e5e7eb'}
-          backgroundColor={isDark ? '#0f172a' : '#f3f4f6'}
           fontStyle={{ color: isDark ? '#e2e8f0' : '#1f2937' }}
           activeFontStyle={{ color: isDark ? '#ffffff' : '#111827', fontWeight: '700' }}
         />

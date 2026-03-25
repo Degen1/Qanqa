@@ -1,8 +1,9 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -11,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
@@ -199,6 +201,22 @@ export default function ToolsScreen() {
   const [translatorOutput, setTranslatorOutput] = useState("");
   const [translatorFrom, setTranslatorFrom] = useState("auto"); // ✅ default auto
   const [translatorTo, setTranslatorTo] = useState("en");
+  const [isHandwritingPadOpen, setIsHandwritingPadOpen] = useState(false);
+  const [handwritingStrokes, setHandwritingStrokes] = useState([]);
+  const [activeStroke, setActiveStroke] = useState([]);
+  const [handwritingPreview, setHandwritingPreview] = useState("");
+  const [handwritingCandidates, setHandwritingCandidates] = useState([]);
+  const [handwritingError, setHandwritingError] = useState("");
+  const [isPreviewingHandwriting, setIsPreviewingHandwriting] = useState(false);
+  const [isRecognizingHandwriting, setIsRecognizingHandwriting] = useState(false);
+  const [handwritingGuide, setHandwritingGuide] = useState({
+    width: 320,
+    height: 150,
+  });
+  const activeStrokeRef = useRef([]);
+  const strokeStartTimeRef = useRef(0);
+  const strokeIdRef = useRef(1);
+  const previewRequestIdRef = useRef(0);
 
   // ✅ All Google Translate languages (common names + official codes)
   const LANGUAGES = useMemo(
@@ -385,6 +403,198 @@ export default function ToolsScreen() {
     }
   };
 
+  const finishStroke = () => {
+    if (!activeStrokeRef.current.length) return;
+    const newStroke = {
+      id: strokeIdRef.current,
+      points: activeStrokeRef.current,
+    };
+    strokeIdRef.current += 1;
+    setHandwritingStrokes((prev) => [...prev, newStroke]);
+    activeStrokeRef.current = [];
+    setActiveStroke([]);
+  };
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => isHandwritingPadOpen,
+        onMoveShouldSetPanResponder: () => isHandwritingPadOpen,
+        onPanResponderGrant: (event) => {
+          setHandwritingError("");
+          strokeStartTimeRef.current = Date.now();
+          const point = {
+            x: event.nativeEvent.locationX,
+            y: event.nativeEvent.locationY,
+            t: 0,
+          };
+          activeStrokeRef.current = [point];
+          setActiveStroke([point]);
+        },
+        onPanResponderMove: (event) => {
+          if (!activeStrokeRef.current.length) return;
+          const nextPoint = {
+            x: event.nativeEvent.locationX,
+            y: event.nativeEvent.locationY,
+            t: Date.now() - strokeStartTimeRef.current,
+          };
+          const previous = activeStrokeRef.current[activeStrokeRef.current.length - 1];
+          const dx = Math.abs(nextPoint.x - previous.x);
+          const dy = Math.abs(nextPoint.y - previous.y);
+          if (dx + dy < 1.5) return;
+          activeStrokeRef.current = [...activeStrokeRef.current, nextPoint];
+          setActiveStroke(activeStrokeRef.current);
+        },
+        onPanResponderRelease: finishStroke,
+        onPanResponderTerminate: finishStroke,
+      }),
+    [isHandwritingPadOpen]
+  );
+
+  const clearHandwritingPad = () => {
+    activeStrokeRef.current = [];
+    setActiveStroke([]);
+    setHandwritingStrokes([]);
+    setHandwritingPreview("");
+    setHandwritingCandidates([]);
+    setHandwritingError("");
+    strokeIdRef.current = 1;
+  };
+
+  const openHandwritingPad = () => {
+    clearHandwritingPad();
+    setIsHandwritingPadOpen(true);
+  };
+
+  const closeHandwritingPad = () => {
+    setIsHandwritingPadOpen(false);
+    clearHandwritingPad();
+  };
+
+  const toggleHandwritingPad = () => {
+    if (isHandwritingPadOpen) {
+      closeHandwritingPad();
+      return;
+    }
+    openHandwritingPad();
+  };
+
+  useEffect(() => {
+    if (!isHandwritingPadOpen) return;
+
+    const strokesSnapshot = [...handwritingStrokes];
+    if (activeStroke.length) {
+      strokesSnapshot.push({ id: strokeIdRef.current + 1, points: activeStroke });
+    }
+
+    if (!strokesSnapshot.length) {
+      previewRequestIdRef.current += 1;
+      setIsPreviewingHandwriting(false);
+      setHandwritingPreview("");
+      setHandwritingCandidates([]);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const requestId = previewRequestIdRef.current + 1;
+      previewRequestIdRef.current = requestId;
+      setIsPreviewingHandwriting(true);
+
+      const languageForInk =
+        translatorFrom === "auto" ? "auto" : translatorFrom.replace("-", "_");
+      const payload = {
+        device: `ReactNative/${Platform.OS}`,
+        options: "enable_pre_space",
+        requests: [
+          {
+            writing_guide: {
+              writing_area_width: Math.round(handwritingGuide.width),
+              writing_area_height: Math.round(handwritingGuide.height),
+            },
+            ink: strokesSnapshot.map((stroke) => [
+              stroke.points.map((point) => Math.round(point.x)),
+              stroke.points.map((point) => Math.round(point.y)),
+              stroke.points.map((point) => Math.max(0, Math.round(point.t))),
+            ]),
+            language: languageForInk,
+          },
+        ],
+      };
+
+      fetch("https://www.google.com/inputtools/request?ime=handwriting&app=gws&cs=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (requestId !== previewRequestIdRef.current) return;
+          const candidates = data?.[1]?.[0]?.[1] || [];
+          setHandwritingCandidates(candidates);
+          setHandwritingPreview(candidates?.[0] || "");
+          setHandwritingError("");
+        })
+        .catch((error) => {
+          if (requestId !== previewRequestIdRef.current) return;
+          setHandwritingPreview("");
+          setHandwritingCandidates([]);
+          setHandwritingError(
+            "Handwriting preview failed. Connect to internet and try again."
+          );
+          console.error("Handwriting preview error:", error);
+        })
+        .finally(() => {
+          if (requestId === previewRequestIdRef.current) {
+            setIsPreviewingHandwriting(false);
+          }
+        });
+    }, 260);
+
+    return () => clearTimeout(timer);
+  }, [
+    isHandwritingPadOpen,
+    handwritingStrokes,
+    activeStroke,
+    translatorFrom,
+    handwritingGuide.width,
+    handwritingGuide.height,
+  ]);
+
+  const handleHandwritingRecognize = async () => {
+    if (!handwritingPreview.trim()) {
+      setHandwritingError("Wait for preview text before Recognize.");
+      return;
+    }
+
+    setIsRecognizingHandwriting(true);
+    try {
+      setTranslatorInput((prev) => {
+        if (!prev.trim()) return handwritingPreview;
+        return `${prev.trim()} ${handwritingPreview}`;
+      });
+      setTranslatorOutput("");
+      closeHandwritingPad();
+    } finally {
+      setIsRecognizingHandwriting(false);
+    }
+  };
+
+  const renderInkDots = (points, keyPrefix) =>
+    points.map((point, index) => (
+      <View
+        key={`${keyPrefix}-${index}`}
+        style={[
+          styles.inkDot,
+          {
+            left: point.x - 2,
+            top: point.y - 2,
+            backgroundColor: palette.button,
+          },
+        ]}
+      />
+    ));
+  const hasHandwritingInk = handwritingStrokes.length > 0 || activeStroke.length > 0;
+
   // ✅ Swap button
   const handleSwap = () => {
     // if from is auto, swapping it into "to" doesn't make sense.
@@ -404,20 +614,9 @@ export default function ToolsScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
       <KeyboardAvoidingView
         style={styles.keyboardAvoiding}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}>
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 24}>
         <View style={styles.pageBody}>
-          <View
-            style={[
-              styles.titlePill,
-              {
-                backgroundColor: palette.surface,
-                borderColor: palette.border,
-              },
-            ]}>
-            <Text style={[styles.titlePillText, { color: palette.text }]}>ትርጉም</Text>
-          </View>
-
           <View style={styles.translatorContainer}>
               {/* FROM */}
               <DropdownSearch
@@ -442,21 +641,168 @@ export default function ToolsScreen() {
                 ))}
               </DropdownSearch>
 
-              <TextInput
-                style={[
-                  styles.translatorInput,
-                  {
-                    borderColor: palette.border,
-                    color: palette.text,
-                    backgroundColor: palette.surfaceStrong,
-                  },
-                ]}
-                placeholder="ኣብዚ ጽሓፉ"
-                placeholderTextColor={palette.muted}
-                value={translatorInput}
-                onChangeText={setTranslatorInput}
-                textAlignVertical="center"
-              />
+              <View style={styles.translatorInputWrap}>
+                <TextInput
+                  style={[
+                    styles.translatorInput,
+                    styles.translatorInputWithIcon,
+                    {
+                      borderColor: palette.border,
+                      color: palette.text,
+                      backgroundColor: palette.surfaceStrong,
+                    },
+                  ]}
+                  placeholder="ኣብዚ ጽሓፉ"
+                  placeholderTextColor={palette.muted}
+                  value={translatorInput}
+                  onChangeText={(value) => {
+                    setTranslatorInput(value);
+                    setTranslatorOutput("");
+                  }}
+                  textAlignVertical="center"
+                />
+                <TouchableOpacity
+                  onPress={toggleHandwritingPad}
+                  activeOpacity={0.9}
+                  style={[
+                    styles.handwritingIconButton,
+                    {
+                      backgroundColor: isHandwritingPadOpen ? palette.button : palette.surface,
+                      borderColor: isHandwritingPadOpen ? palette.button : palette.border,
+                    },
+                  ]}>
+                  <MaterialCommunityIcons
+                    name="pencil"
+                    size={18}
+                    color={isHandwritingPadOpen ? palette.buttonText : palette.text}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {isHandwritingPadOpen ? (
+                <View
+                  style={[
+                    styles.handwritingInlineCard,
+                    {
+                      backgroundColor: palette.surfaceStrong,
+                      borderColor: palette.border,
+                    },
+                  ]}>
+                  <Text style={[styles.handwritingInlineTitle, { color: palette.text }]}>
+                    Handwriting
+                  </Text>
+
+                  <View
+                    style={[
+                      styles.handwritingPad,
+                      {
+                        borderColor: palette.border,
+                        backgroundColor: palette.surface,
+                      },
+                    ]}
+                    onLayout={(event) => {
+                      const { width, height } = event.nativeEvent.layout;
+                      setHandwritingGuide({
+                        width: width || 320,
+                        height: height || 150,
+                      });
+                    }}
+                    {...panResponder.panHandlers}>
+                    {handwritingStrokes.map((stroke) =>
+                      renderInkDots(stroke.points, `stroke-${stroke.id}`)
+                    )}
+                    {renderInkDots(activeStroke, "active")}
+                  </View>
+
+                  <View style={styles.handwritingActionRow}>
+                    <TouchableOpacity
+                      onPress={clearHandwritingPad}
+                      activeOpacity={0.9}
+                      disabled={!hasHandwritingInk}
+                      style={[
+                        styles.handwritingActionButton,
+                        {
+                          backgroundColor: palette.surface,
+                          borderColor: palette.border,
+                          opacity: hasHandwritingInk ? 1 : 0.7,
+                        },
+                      ]}>
+                      <Text
+                        style={[
+                          styles.handwritingActionButtonText,
+                          { color: palette.text },
+                        ]}>
+                        Clear
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={handleHandwritingRecognize}
+                      activeOpacity={0.9}
+                      disabled={
+                        isRecognizingHandwriting ||
+                        isPreviewingHandwriting ||
+                        !handwritingPreview.trim()
+                      }
+                      style={[
+                        styles.handwritingActionButton,
+                        styles.recognizeButton,
+                        {
+                          backgroundColor: palette.button,
+                          borderColor: palette.button,
+                          opacity:
+                            isRecognizingHandwriting ||
+                            isPreviewingHandwriting ||
+                            !handwritingPreview.trim()
+                              ? 0.7
+                              : 1,
+                        },
+                      ]}>
+                      <Text
+                        style={[
+                          styles.handwritingActionButtonText,
+                          { color: palette.buttonText },
+                        ]}>
+                        {isRecognizingHandwriting ? "Recognizing..." : "Recognize"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.handwritingPreviewCard,
+                      {
+                        backgroundColor: palette.surface,
+                        borderColor: palette.border,
+                      },
+                    ]}>
+                    <Text style={[styles.handwritingPreviewLabel, { color: palette.muted }]}>
+                      Preview
+                    </Text>
+                    <Text style={[styles.handwritingPreviewText, { color: palette.text }]}>
+                      {handwritingPreview ||
+                        (isPreviewingHandwriting
+                          ? "Recognizing handwriting..."
+                          : "Preview updates automatically while you write.")}
+                    </Text>
+                    {handwritingCandidates.length > 1 ? (
+                      <Text style={[styles.handwritingPreviewAlt, { color: palette.muted }]}>
+                        {handwritingCandidates.slice(1, 4).join(" • ")}
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  {handwritingError ? (
+                    <Text style={[styles.handwritingErrorText, { color: "#ef4444" }]}>
+                      {handwritingError}
+                    </Text>
+                  ) : (
+                    <Text style={[styles.handwritingHint, { color: palette.muted }]}>
+                      Draw on the pad, then tap Recognize.
+                    </Text>
+                  )}
+                </View>
+              ) : null}
 
               {/* ✅ Swap button */}
               <TouchableOpacity
@@ -540,20 +886,93 @@ const styles = StyleSheet.create({
   dropdownBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
-  titlePill: {
-    height: 45,
-    borderRadius: 20,
+
+  translatorContainer: {
+    marginTop: 10,
+  },
+  translatorInputWrap: {
+    position: "relative",
+  },
+  translatorInputWithIcon: {
+    paddingRight: 52,
+  },
+  handwritingIconButton: {
+    position: "absolute",
+    right: 7,
+    top: 6,
+    width: 33,
+    height: 33,
+    borderRadius: 17,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  titlePillText: {
+  handwritingInlineCard: {
+    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14,
+  },
+  handwritingInlineTitle: {
     fontSize: 16,
     fontWeight: "700",
+    marginBottom: 8,
   },
-
-  translatorContainer: {
-    marginTop: 10,
+  handwritingPad: {
+    height: 150,
+    borderWidth: 1,
+    borderRadius: 20,
+    marginBottom: 8,
+    overflow: "hidden",
+    position: "relative",
+  },
+  inkDot: {
+    position: "absolute",
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+  handwritingActionRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 4,
+  },
+  handwritingActionButton: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 10,
+  },
+  recognizeButton: {
+    flex: 1.4,
+  },
+  handwritingActionButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  handwritingPreviewCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 6,
+  },
+  handwritingPreviewLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 2,
+    textTransform: "uppercase",
+  },
+  handwritingPreviewText: {
+    fontSize: 15,
+    lineHeight: 20,
+  },
+  handwritingPreviewAlt: {
+    fontSize: 12,
+    marginTop: 6,
   },
   translatorPicker: {
     color: "#111827",
@@ -571,6 +990,16 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     marginBottom: 5,
     textAlignVertical: "center",
+  },
+  handwritingHint: {
+    fontSize: 12,
+    marginBottom: 8,
+    marginTop: 2,
+  },
+  handwritingErrorText: {
+    fontSize: 12,
+    marginBottom: 8,
+    marginTop: 2,
   },
   translateButton: {
     alignItems: "center",

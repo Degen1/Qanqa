@@ -16,7 +16,7 @@ export default function TabLayout() {
         selected: { color: isDark ? '#f8fafc' : '#111827', fontSize: 12, fontWeight: '700' },
       }}>
           <NativeTabs.Trigger name="index">
-            <Label>ደጀን</Label>
+            <Label>ናተይ</Label>
             <Icon sf={"play.square.fill"}
             selectedColor={isDark ? '#f8fafc' : '#111827'}
             drawable="ic_menu_mylocation" />

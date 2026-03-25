@@ -25,7 +25,8 @@ export const DICTIONARY_WORDS: DictionaryWord[] = [
     definitions: [
       "ምስ ሰብ ክትራኸብ ከለኻ እትጥቀመሉ ሰላምታ",
       "ጸቕጢ ከም ዘይብልካ ንምግላጽ ክትጥቀመሉ ትኽእል ኢኻ",
-    ],    examples: ["ትምህርቲ ንህይወት ኣለዎ ኣገዳሲ ተሳትፎ።"],
+    ],    
+    examples: ["ትምህርቲ ንህይወት ኣለዎ ኣገዳሲ ተሳትፎ።"],
     synonyms: ["ስልጠና", "ምምሃር"],
     antonyms: ["ድንቁርና"],
   },
