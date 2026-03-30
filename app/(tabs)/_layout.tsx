@@ -26,7 +26,7 @@ export default function TabLayout() {
             <Label>ትርጉም</Label>
             <Icon sf={"globe"}
             selectedColor={isDark ? '#f8fafc' : '#111827'}
-            drawable="ic_menu_manage" />
+            drawable="ic_menu_mapmode" />
           </NativeTabs.Trigger>
           
 
@@ -34,7 +34,7 @@ export default function TabLayout() {
             <Label>መዝገብ</Label>
             <Icon sf={"book.closed.fill"}
             selectedColor={isDark ? '#f8fafc' : '#111827'}
-            drawable="ic_menu_manage" />
+            drawable="ic_menu_agenda" />
           </NativeTabs.Trigger>
 
 
@@ -42,7 +42,7 @@ export default function TabLayout() {
             <Label>መማረጺ</Label>
             <Icon sf={"gearshape.fill"}
             selectedColor={isDark ? '#f8fafc' : '#111827'}
-            drawable="ic_menu_manage" />
+            drawable="ic_menu_preferences" />
           </NativeTabs.Trigger>
     
 
