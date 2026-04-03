@@ -110,7 +110,7 @@ const DropdownSearch = (props) => {
           ]}
           activeOpacity={0.9}>
           <Text style={[itemStyle, { textAlign: "center" }]}>
-            {selectedItem ? selectedItem.label : placeholder || "Select an option"}
+            {selectedItem ? selectedItem.label : placeholder || "ሓደ ኣማራጺ ምረጹ"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -397,7 +397,7 @@ export default function ToolsScreen() {
     } catch (error) {
       // ✅ Offline fallback (no crash)
       setTranslatorOutput(
-        "Offline / Network error. Connect to internet and try again."
+        "ምስ ኢንተርነት ተራኸቡ እሞ እንደገና ፈትኑ።"
       );
       console.error("Translation error:", error);
     }
@@ -539,7 +539,7 @@ export default function ToolsScreen() {
           setHandwritingPreview("");
           setHandwritingCandidates([]);
           setHandwritingError(
-            "Handwriting preview failed. Connect to internet and try again."
+            "መርኣዪ ኣይተዓወተን። ምስ ኢንተርነት ተራኸቡ እሞ እንደገና ፈትኑ።"
           );
           console.error("Handwriting preview error:", error);
         })
@@ -562,7 +562,7 @@ export default function ToolsScreen() {
 
   const handleHandwritingRecognize = async () => {
     if (!handwritingPreview.trim()) {
-      setHandwritingError("Wait for preview text before Recognize.");
+      setHandwritingError("ንመርኣዪ ተጸበዩ ቅድሚ ምጥቃም");
       return;
     }
 
@@ -628,7 +628,7 @@ export default function ToolsScreen() {
                   setTranslatorInput("");
                   setTranslatorOutput("");
                 }}
-                placeholder="From"
+                placeholder="ካብ"
                 palette={palette}
                 textColor={palette.text}
               >
@@ -689,7 +689,7 @@ export default function ToolsScreen() {
                     },
                   ]}>
                   <Text style={[styles.handwritingInlineTitle, { color: palette.text }]}>
-                    Handwriting
+                    ብኢድኩም ጸሓፉ
                   </Text>
 
                   <View
@@ -732,7 +732,7 @@ export default function ToolsScreen() {
                           styles.handwritingActionButtonText,
                           { color: palette.text },
                         ]}>
-                        Clear
+                        ምጽራይ
                         </Text>
                     </TouchableOpacity>
 
@@ -763,7 +763,7 @@ export default function ToolsScreen() {
                           styles.handwritingActionButtonText,
                           { color: palette.buttonText },
                         ]}>
-                        {isRecognizingHandwriting ? "Recognizing..." : "Recognize"}
+                        {isRecognizingHandwriting ? "ምልላይ..." : "ምጥቃም"}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -777,13 +777,13 @@ export default function ToolsScreen() {
                       },
                     ]}>
                     <Text style={[styles.handwritingPreviewLabel, { color: palette.muted }]}>
-                      Preview
+                      መርኣዪ
                     </Text>
                     <Text style={[styles.handwritingPreviewText, { color: palette.text }]}>
                       {handwritingPreview ||
                         (isPreviewingHandwriting
-                          ? "Recognizing handwriting..."
-                          : "Preview updates automatically while you write.")}
+                          ? "ጽሑፍ ምልላይ..."
+                          : "መርኣዪ ባዕሉ ይሕደሽ አንዳ ጻሓፍኩም ከለኹም")}
                     </Text>
                     {handwritingCandidates.length > 1 ? (
                       <Text style={[styles.handwritingPreviewAlt, { color: palette.muted }]}>
@@ -798,7 +798,7 @@ export default function ToolsScreen() {
                     </Text>
                   ) : (
                     <Text style={[styles.handwritingHint, { color: palette.muted }]}>
-                      Draw on the pad, then tap Recognize.
+                      ብኢድኩም ጻሓፉ፣ ድሕሪኡ ምጥቃም ጠውቑ
                     </Text>
                   )}
                 </View>
@@ -825,7 +825,7 @@ export default function ToolsScreen() {
                   setTranslatorTo(itemValue);
                   setTranslatorOutput("");
                 }}
-                placeholder="To"
+                placeholder="ናብ"
                 palette={palette}
                 textColor={palette.text}
               >
